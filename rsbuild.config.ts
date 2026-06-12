@@ -86,6 +86,7 @@ export default defineConfig({
         port: 5000,
         host: '0.0.0.0',
         compress: true,
+        historyApiFallback: true,
         headers: {
             'Cross-Origin-Opener-Policy': 'unsafe-none',
             'Cross-Origin-Embedder-Policy': 'unsafe-none',
