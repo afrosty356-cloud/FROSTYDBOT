@@ -24,6 +24,8 @@ export const domain_app_ids = {
     'dbot.deriv.com': APP_IDS.PRODUCTION,
     'dbot.deriv.be': APP_IDS.PRODUCTION_BE,
     'dbot.deriv.me': APP_IDS.PRODUCTION_ME,
+    'valentinetraders.site': APP_IDS.PRODUCTION,
+    'www.valentinetraders.site': APP_IDS.PRODUCTION,
     // Legacy app ID fallback — used when old users connect from unlisted domains
     'legacy': APP_IDS.PRODUCTION_LEGACY,
 };
