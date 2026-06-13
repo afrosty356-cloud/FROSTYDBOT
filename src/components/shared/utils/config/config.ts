@@ -11,8 +11,6 @@ export const livechat_client_id = '66aa088aad5a414484c1fd1fa8a5ace7';
 
 export const domain_app_ids = {
     'dbot.deriv.com': APP_IDS.PRODUCTION,
-    'valentinetraders.site': APP_IDS.PRODUCTION,
-    'www.valentinetraders.site': APP_IDS.PRODUCTION,
 };
 
 export const getCurrentProductionDomain = () =>
