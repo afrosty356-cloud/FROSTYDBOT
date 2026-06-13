@@ -16,11 +16,16 @@ import ToolbarWidgets from './toolbar-widgets';
 import '@deriv/deriv-charts/dist/smartcharts.css';
 
 type TSubscription = {
-    [key: string]: null | { unsubscribe?: () => void };
+    [key: string]: null | {
+        unsubscribe?: () => void;
+    };
 };
 
 type TError = null | {
-    error?: { code?: string; message?: string };
+    error?: {
+        code?: string;
+        message?: string;
+    };
 };
 
 const subscriptions: TSubscription = {};
@@ -30,8 +35,8 @@ const Chart = observer(({ show_digits_stats }: { show_digits_stats: boolean }) =
     const { common, ui } = useStore();
     const { chart_store, run_panel, dashboard } = useStore();
     const [isSafari, setIsSafari] = useState(false);
+    // FIX 1: reactive connection state — poll until chart_api.api WebSocket is truly OPEN
     const [is_connection_opened, setIsConnectionOpened] = useState(false);
-    const chart_api_ref = useRef<typeof chart_api.api>(null);
 
     const {
         chart_type,
@@ -51,90 +56,50 @@ const Chart = observer(({ show_digits_stats }: { show_digits_stats: boolean }) =
     const { is_drawer_open } = run_panel;
     const { is_chart_modal_visible } = dashboard;
     const settings = {
-        assetInformation: false,
+        assetInformation: false, // ui.is_chart_asset_info_visible,
         countdown: true,
-        isHighestLowestMarkerEnabled: false,
+        isHighestLowestMarkerEnabled: false, // TODO: Pending UI,
         language: common.current_language.toLowerCase(),
         position: ui.is_chart_layout_default ? 'bottom' : 'left',
         theme: ui.is_dark_mode_on ? 'dark' : 'light',
     };
 
     useEffect(() => {
+        // Safari browser detection
         const isSafariBrowser = () => {
             const ua = navigator.userAgent.toLowerCase();
             return ua.indexOf('safari') !== -1 && ua.indexOf('chrome') === -1 && ua.indexOf('android') === -1;
         };
         setIsSafari(isSafariBrowser());
+
+        return () => {
+            if (chart_api.api) chart_api.api.forgetAll('ticks');
+        };
     }, []);
 
-    // Wait for chart_api.api WebSocket to be truly OPEN before enabling SmartChart
+    // FIX 1: Wait for chart_api.api WebSocket to be OPEN before enabling SmartChart
     useEffect(() => {
         let cancelled = false;
-        let poll_interval: ReturnType<typeof setInterval> | null = null;
 
-        const checkAndSet = () => {
-            const api = chart_api.api;
-            if (!api) return false;
-            const state = api.connection?.readyState;
-            if (state === WebSocket.OPEN) {
-                chart_api_ref.current = api;
-                if (!cancelled) setIsConnectionOpened(true);
-                return true;
-            }
-            return false;
-        };
-
-        const start = async () => {
-            // Init chart_api if not already
+        const tryConnect = async () => {
             if (!chart_api.api) {
                 await chart_api.init();
             }
 
-            // If already open, set immediately
-            if (checkAndSet()) return;
-
-            // Otherwise poll until open
-            poll_interval = setInterval(() => {
-                const api = chart_api.api;
-                if (!api) return;
-                const state = api.connection?.readyState;
+            const check = () => {
+                if (cancelled) return;
+                const state = chart_api.api?.connection?.readyState;
                 if (state === WebSocket.OPEN) {
-                    chart_api_ref.current = api;
-                    if (!cancelled) setIsConnectionOpened(true);
-                    if (poll_interval) clearInterval(poll_interval);
-                } else if (state === WebSocket.CLOSED || state === WebSocket.CLOSING) {
-                    // Dead connection - reinit
-                    chart_api.init(true).then(() => {
-                        // will be picked up on next interval tick
-                    });
+                    setIsConnectionOpened(true);
+                } else {
+                    setTimeout(check, 100);
                 }
-            }, 100);
+            };
+            check();
         };
 
-        start();
-
-        return () => {
-            cancelled = true;
-            if (poll_interval) clearInterval(poll_interval);
-        };
-    }, []);
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            try {
-                Object.keys(subscriptions).forEach(id => {
-                    const sub = subscriptions[id];
-                    if (sub && typeof (sub as any).unsubscribe === 'function') {
-                        (sub as any).unsubscribe();
-                    }
-                    delete subscriptions[id];
-                });
-                chart_api.api?.forgetAll('ticks');
-            } catch {
-                // ignore
-            }
-        };
+        tryConnect();
+        return () => { cancelled = true; };
     }, []);
 
     useEffect(() => {
@@ -144,76 +109,44 @@ const Chart = observer(({ show_digits_stats }: { show_digits_stats: boolean }) =
     useEffect(() => {
         if (!symbol) {
             updateSymbol();
+            // Retry until active_symbols load and a symbol becomes available
             const retry = setInterval(() => {
-                if (!symbol) updateSymbol();
-                else clearInterval(retry);
+                updateSymbol();
             }, 500);
             return () => clearInterval(retry);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [symbol]);
 
-    const getApi = () => chart_api_ref.current || chart_api.api;
-
-    const requestAPI = async (req: ServerTimeRequest | ActiveSymbolsRequest | TradingTimesRequest) => {
-        const api = getApi();
-        if (!api) throw new Error('Chart API not initialized');
-        return api.send(req);
+    const requestAPI = (req: ServerTimeRequest | ActiveSymbolsRequest | TradingTimesRequest) => {
+        return chart_api.api.send(req);
     };
 
+    // FIX 2: pass the real requestForgetStream to SmartChart (original passed empty fn)
     const requestForgetStream = (subscription_id: string) => {
-        if (!subscription_id) return;
-        try {
-            const sub = subscriptions[subscription_id];
-            if (sub && typeof (sub as any).unsubscribe === 'function') {
-                (sub as any).unsubscribe();
-            }
-            delete subscriptions[subscription_id];
-            const api = getApi();
-            api?.forget(subscription_id);
-        } catch {
-            // ignore
-        }
+        if (subscription_id) chart_api.api?.forget(subscription_id);
     };
 
     const requestSubscribe = async (req: TicksStreamRequest, callback: (data: any) => void) => {
-        const api = getApi();
-        if (!api) return;
-
         try {
-            // Unsubscribe RxJS listeners and clear our local map
-            const prev_id = chartSubscriptionIdRef.current;
-            if (prev_id) requestForgetStream(prev_id);
+            requestForgetStream(chartSubscriptionIdRef.current);
 
-            // Tell the server to drop ALL stale tick subscriptions on this connection
-            // This prevents the "AlreadySubscribed" error when the chart remounts
-            try {
-                await api.send({ forget_all: 'ticks' });
-            } catch {
-                // not a hard failure — proceed anyway
-            }
+            // FIX 3: clear any stale server-side tick subscriptions to avoid AlreadySubscribed error
+            try { await chart_api.api.send({ forget_all: 'ticks' }); } catch { /* non-fatal */ }
 
-            const history = await api.send(req);
-            const subscription_id = history?.subscription?.id;
-            setChartSubscriptionId(subscription_id);
+            const history = await chart_api.api.send(req);
+            setChartSubscriptionId(history?.subscription.id);
             if (history) callback(history);
-
-            if (req.subscribe === 1 && subscription_id) {
-                const msg_subscription = api.onMessage()?.subscribe(
-                    ({ data }: { data: TicksHistoryResponse & { subscription?: { id: string } } }) => {
-                        if (
-                            (data as any)?.subscription?.id === subscription_id ||
-                            (data as any)?.tick?.id === subscription_id
-                        ) {
-                            callback(data);
-                        }
-                    }
-                );
-                subscriptions[subscription_id] = msg_subscription;
+            if (req.subscribe === 1) {
+                subscriptions[history?.subscription.id] = chart_api.api
+                    .onMessage()
+                    ?.subscribe(({ data }: { data: TicksHistoryResponse }) => {
+                        callback(data);
+                    });
             }
         } catch (e) {
-            if ((e as TError)?.error?.code === 'MarketIsClosed') callback([]);
             // eslint-disable-next-line no-console
+            (e as TError)?.error?.code === 'MarketIsClosed' && callback([]); // if market is closed send empty array to resolve
             console.log((e as TError)?.error?.message);
         }
     };
