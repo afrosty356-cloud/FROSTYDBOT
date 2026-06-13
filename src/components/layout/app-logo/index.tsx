@@ -12,6 +12,13 @@ export const AppLogo = () => {
                 alt='FrostyDBot'
                 className='app-header__logo-img'
             />
+            <span className='app-header__logo-name'>
+                {'FROSTYDBOT'.split('').map((char, i) => (
+                    <span key={i} className='app-header__logo-name__char' style={{ animationDelay: `${i * 0.08}s` }}>
+                        {char}
+                    </span>
+                ))}
+            </span>
         </div>
     );
 };

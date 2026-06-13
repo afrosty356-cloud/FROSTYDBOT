@@ -8,11 +8,11 @@ export type TSidebarItem = {
 
 export const SIDEBAR_INTRO = (): TSidebarItem[] => [
     {
-        label: localize('Welcome to Deriv Bot!'),
+        label: localize('Welcome to FrostyDBot!'),
         content: [
             {
                 data: localize(
-                    'Ready to automate your trading strategy without writing any code? You’ve come to the right place.'
+                    'Ready to automate your trading strategy without writing any code? You\u2019ve come to the right place.'
                 ),
             },
             { data: localize('Check out these guides and FAQs to learn more about building your bot:') },
@@ -21,14 +21,14 @@ export const SIDEBAR_INTRO = (): TSidebarItem[] => [
     },
     {
         label: localize('Guide'),
-        content: [{ data: localize('Deriv Bot - your automated trading partner') }],
+        content: [{ data: localize('FrostyDBot - your automated trading partner') }],
         link: true,
     },
     {
         label: localize('FAQs'),
         content: [
             {
-                data: localize('What is Deriv Bot?'),
+                data: localize('What is FrostyDBot?'),
                 faq_id: 'faq-0',
             },
             {

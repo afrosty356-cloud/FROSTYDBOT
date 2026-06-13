@@ -6,6 +6,7 @@
         height: 100%;
         display: flex;
         align-items: center;
+        gap: 0.8rem;
     }
 
     &__logo-img {
@@ -14,5 +15,50 @@
         object-fit: contain;
         border-radius: 50%;
         display: block;
+        flex-shrink: 0;
+    }
+
+    &__logo-name {
+        display: flex;
+        align-items: center;
+        font-size: 1.5rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        white-space: nowrap;
+
+        &__char {
+            display: inline-block;
+            background: linear-gradient(135deg, #c9a227 0%, #ffe066 40%, #fff5a0 60%, #c9a227 100%);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: frosty-shimmer 2.4s ease-in-out infinite, frosty-pulse 1.8s ease-in-out infinite alternate;
+            text-shadow: none;
+            filter: drop-shadow(0 0 4px rgba(201, 162, 39, 0.7));
+        }
+    }
+}
+
+@keyframes frosty-shimmer {
+    0% {
+        background-position: 0% center;
+    }
+    50% {
+        background-position: 100% center;
+    }
+    100% {
+        background-position: 0% center;
+    }
+}
+
+@keyframes frosty-pulse {
+    0% {
+        filter: drop-shadow(0 0 3px rgba(201, 162, 39, 0.5));
+        transform: scaleY(1);
+    }
+    100% {
+        filter: drop-shadow(0 0 8px rgba(255, 224, 102, 0.95));
+        transform: scaleY(1.04);
     }
 }
