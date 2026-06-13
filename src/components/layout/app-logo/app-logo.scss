@@ -10,8 +10,8 @@
     }
 
     &__logo-img {
-        height: 40px;
-        width: 40px;
+        height: 36px;
+        width: 36px;
         object-fit: contain;
         border-radius: 50%;
         display: block;
@@ -21,7 +21,7 @@
     &__logo-name {
         display: flex;
         align-items: center;
-        font-size: 1.5rem;
+        font-size: 1.4rem;
         font-weight: 800;
         letter-spacing: 0.12em;
         white-space: nowrap;
@@ -37,6 +37,37 @@
             text-shadow: none;
             filter: drop-shadow(0 0 4px rgba(201, 162, 39, 0.7));
         }
+    }
+}
+
+/* Desktop — slightly larger */
+.app-header--desktop {
+    .app-header__logo-img {
+        height: 40px;
+        width: 40px;
+    }
+
+    .app-header__logo-name {
+        font-size: 1.5rem;
+    }
+}
+
+/* Mobile — tighter layout */
+.app-header--mobile {
+    .app-header__logo {
+        padding-inline-start: 0.8rem;
+        padding-inline-end: 1rem;
+        gap: 0.6rem;
+    }
+
+    .app-header__logo-img {
+        height: 30px;
+        width: 30px;
+    }
+
+    .app-header__logo-name {
+        font-size: 1.2rem;
+        letter-spacing: 0.1em;
     }
 }
 

@@ -408,8 +408,8 @@ export default class RunPanelStore {
         this.onOkButtonClick = this.onCloseDialog;
         this.onCancelButtonClick = null;
         this.dialog_options = {
-            title: localize("Deriv Bot isn't quite ready for real accounts"),
-            message: localize('Please switch to your demo account to run your Deriv Bot.'),
+            title: localize("FrostyDBot isn't quite ready for real accounts"),
+            message: localize('Please switch to your demo account to run your FrostyDBot.'),
         };
         this.is_dialog_open = true;
     };
@@ -434,7 +434,7 @@ export default class RunPanelStore {
         this.onCancelButtonClick = null;
         this.dialog_options = {
             title: localize('Import error'),
-            message: localize('This strategy is currently not compatible with Deriv Bot.'),
+            message: localize('This strategy is currently not compatible with FrostyDBot.'),
         };
         this.is_dialog_open = true;
     };
