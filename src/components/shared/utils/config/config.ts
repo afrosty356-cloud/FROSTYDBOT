@@ -66,25 +66,25 @@ export const getDefaultAppIdAndUrl = () => {
     }
 
     const current_domain = getCurrentProductionDomain() ?? '';
-    const app_id = domain_app_ids[current_domain as keyof typeof domain_app_ids] ?? APP_IDS.PRODUCTION;
+    // Known production domains keep their specific OAuth app ID for login/trading.
+    // Everything else falls back to the numeric 84799 so WebSocket API calls work.
+    const app_id = domain_app_ids[current_domain as keyof typeof domain_app_ids] ?? APP_IDS.LOCALHOST;
 
     return { app_id, server_url };
 };
 
 export const getAppId = () => {
-    let app_id = null;
+    // Manual override via localStorage (set from the /endpoint page)
     const config_app_id = window.localStorage.getItem('config.app_id');
+    if (config_app_id) return config_app_id;
+
+    // Test/local environments (Replit, localhost, .binary.sx, etc.) always use 84799
+    if (isTestLink()) return APP_IDS.LOCALHOST;
+
     const current_domain = getCurrentProductionDomain() ?? '';
-
-    if (config_app_id) {
-        app_id = config_app_id;
-    } else if (isTestLink()) {
-        app_id = APP_IDS.LOCALHOST;
-    } else {
-        app_id = domain_app_ids[current_domain as keyof typeof domain_app_ids] ?? APP_IDS.PRODUCTION;
-    }
-
-    return app_id;
+    // Known production domains keep their OAuth app ID so login and trading work correctly.
+    // Any other unknown domain also falls back to 84799 (valid numeric WebSocket API app ID).
+    return domain_app_ids[current_domain as keyof typeof domain_app_ids] ?? APP_IDS.LOCALHOST;
 };
 
 export const getLegacyAppId = () => APP_IDS.PRODUCTION_LEGACY;

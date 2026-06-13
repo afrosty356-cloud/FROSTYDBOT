@@ -82,6 +82,21 @@ const AppContent = observer(() => {
         }
     }, [common, connectionStatus, offline_timeout]);
 
+    // Universal failsafe: if the loading screen is still showing after 8 seconds for any reason
+    // (slow WebSocket, failed Firebase check, etc.), force it away so the user sees the app.
+    useEffect(() => {
+        const failsafe = setTimeout(() => {
+            if (is_loading) {
+                console.log('[Failsafe] Loading timeout reached, forcing dashboard display');
+                if (!app.dbot_store) init();
+                setIsApiInitialized(true);
+                setIsLoading(false);
+            }
+        }, 8000);
+        return () => clearTimeout(failsafe);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // Handle offline scenarios - don't wait indefinitely for API
     useEffect(() => {
         if (!isOnline && is_loading) {
