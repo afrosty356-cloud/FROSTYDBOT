@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
 import './copy-trading.scss';
@@ -40,8 +40,37 @@ const CopyTrading = observer(() => {
     const [errorMsg, setErrorMsg] = useState('');
     const [showTokenWarning, setShowTokenWarning] = useState(false);
 
+    const [sessionTime, setSessionTime] = useState(0);
+    const sessionStartRef = useRef<number | null>(null);
+    const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
     const wsRef = useRef<WebSocket | null>(null);
     const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const stats = useMemo(() => {
+        const tradeLogs_real = tradeLogs.filter(l => l.contract_type !== 'SYSTEM');
+        const copied = tradeLogs_real.filter(l => l.status === 'copied').length;
+        const failed = tradeLogs_real.filter(l => l.status === 'failed').length;
+        const total = copied + failed;
+        const successRate = total > 0 ? Math.round((copied / total) * 100) : null;
+        const volume = tradeLogs_real
+            .filter(l => l.status === 'copied')
+            .reduce((sum, l) => {
+                const num = parseFloat(l.amount.split(' ')[0]);
+                return sum + (isNaN(num) ? 0 : num);
+            }, 0);
+        const currency = tradeLogs_real.find(l => l.amount.includes(' '))?.amount.split(' ')[1] ?? '';
+        return { copied, failed, total, successRate, volume, currency };
+    }, [tradeLogs]);
+
+    const formatSessionTime = (secs: number) => {
+        const h = Math.floor(secs / 3600);
+        const m = Math.floor((secs % 3600) / 60);
+        const s = secs % 60;
+        if (h > 0) return `${h}h ${m}m`;
+        if (m > 0) return `${m}m ${s}s`;
+        return `${s}s`;
+    };
 
     const addLog = (log: Omit<TradeLog, 'id' | 'time'>) => {
         setTradeLogs(prev => [
@@ -59,6 +88,10 @@ const CopyTrading = observer(() => {
             clearInterval(pingIntervalRef.current);
             pingIntervalRef.current = null;
         }
+        if (sessionTimerRef.current) {
+            clearInterval(sessionTimerRef.current);
+            sessionTimerRef.current = null;
+        }
         if (wsRef.current) {
             wsRef.current.close();
             wsRef.current = null;
@@ -72,6 +105,26 @@ const CopyTrading = observer(() => {
         return () => disconnectWS();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    useEffect(() => {
+        if (copyStatus === 'active') {
+            sessionStartRef.current = Date.now();
+            setSessionTime(0);
+            sessionTimerRef.current = setInterval(() => {
+                if (sessionStartRef.current) {
+                    setSessionTime(Math.floor((Date.now() - sessionStartRef.current) / 1000));
+                }
+            }, 1000);
+        } else {
+            if (sessionTimerRef.current) {
+                clearInterval(sessionTimerRef.current);
+                sessionTimerRef.current = null;
+            }
+        }
+        return () => {
+            if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
+        };
+    }, [copyStatus]);
 
     const connectAndAuthorize = async (): Promise<boolean> => {
         return new Promise(resolve => {
@@ -424,6 +477,39 @@ const CopyTrading = observer(() => {
                 </div>
 
                 <div className='copy-trading__right'>
+                    <div className='copy-trading__stats-strip'>
+                        <div className='copy-trading__stat'>
+                            <span className='copy-trading__stat-value'>{stats.copied}</span>
+                            <span className='copy-trading__stat-label'>Copied</span>
+                        </div>
+                        <div className='copy-trading__stat-divider' />
+                        <div className='copy-trading__stat'>
+                            <span className='copy-trading__stat-value copy-trading__stat-value--fail'>{stats.failed}</span>
+                            <span className='copy-trading__stat-label'>Failed</span>
+                        </div>
+                        <div className='copy-trading__stat-divider' />
+                        <div className='copy-trading__stat'>
+                            <span className='copy-trading__stat-value copy-trading__stat-value--rate'>
+                                {stats.successRate !== null ? `${stats.successRate}%` : '—'}
+                            </span>
+                            <span className='copy-trading__stat-label'>Success Rate</span>
+                        </div>
+                        <div className='copy-trading__stat-divider' />
+                        <div className='copy-trading__stat'>
+                            <span className='copy-trading__stat-value'>
+                                {stats.volume > 0 ? `${stats.volume.toFixed(2)} ${stats.currency}` : '—'}
+                            </span>
+                            <span className='copy-trading__stat-label'>Volume</span>
+                        </div>
+                        <div className='copy-trading__stat-divider' />
+                        <div className='copy-trading__stat'>
+                            <span className={`copy-trading__stat-value ${copyStatus === 'active' ? 'copy-trading__stat-value--live' : ''}`}>
+                                {copyStatus === 'active' || sessionTime > 0 ? formatSessionTime(sessionTime) : '—'}
+                            </span>
+                            <span className='copy-trading__stat-label'>Session Time</span>
+                        </div>
+                    </div>
+
                     <div className='copy-trading__card copy-trading__card--full'>
                         <div className='copy-trading__log-header'>
                             <h2 className='copy-trading__card-title'>Trade Log</h2>
