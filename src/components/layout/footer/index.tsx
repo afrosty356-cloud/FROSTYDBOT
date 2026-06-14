@@ -15,6 +15,7 @@ import LanguageSettings from './LanguageSettings';
 import NetworkStatus from './NetworkStatus';
 import ResponsibleTrading from './ResponsibleTrading';
 import ServerTime from './ServerTime';
+import Telegram from './Telegram';
 import WhatsApp from './WhatsApp';
 import './footer.scss';
 
@@ -38,7 +39,8 @@ const Footer = () => {
             <ResponsibleTrading />
             <Deriv />
             <Livechat />
-            {cs_chat_whatsapp && <WhatsApp />}
+            <WhatsApp />
+            <Telegram />
             <div className='app-footer__vertical-line' />
             <ServerTime />
             <div className='app-footer__vertical-line' />
