@@ -552,3 +552,78 @@
         margin-inline-start: 0.4rem;
     }
 }
+
+.dashboard__affiliate-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 12px 16px 0;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #fffbf0 0%, #fdf3d0 60%, #faeec0 100%);
+    border: 1.5px solid rgba(180, 130, 40, 0.45);
+    border-radius: 12px;
+    box-shadow: 0 3px 14px rgba(211, 162, 85, 0.25);
+    animation: affiliate-beacon 3s ease-in-out infinite;
+
+    &__text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    &__title {
+        font-size: 15px;
+        font-weight: 700;
+        color: #5a3a00;
+    }
+
+    &__subtitle {
+        font-size: 13px;
+        color: #7a5c20;
+    }
+
+    &__btn {
+        flex-shrink: 0;
+        padding: 10px 20px;
+        background: linear-gradient(135deg, #9C6629 0%, #D3A255 50%, #9C6629 100%);
+        background-size: 200% auto;
+        color: #1a0e00;
+        font-size: 13px;
+        font-weight: 700;
+        border-radius: 8px;
+        text-decoration: none;
+        white-space: nowrap;
+        box-shadow: 0 2px 10px rgba(211, 162, 85, 0.4);
+        transition: all 0.3s ease;
+
+        &:hover {
+            background-position: right center;
+            box-shadow: 0 4px 16px rgba(211, 162, 85, 0.65);
+            transform: scale(1.03);
+            color: #1a0e00;
+            text-decoration: none;
+        }
+    }
+
+    @keyframes affiliate-beacon {
+        0%, 100% {
+            box-shadow: 0 3px 14px rgba(211, 162, 85, 0.25);
+            border-color: rgba(180, 130, 40, 0.45);
+        }
+        50% {
+            box-shadow: 0 4px 22px rgba(211, 162, 85, 0.5);
+            border-color: rgba(211, 162, 85, 0.75);
+        }
+    }
+
+    @media (max-width: 768px) {
+        flex-direction: column;
+        align-items: flex-start;
+
+        &__btn {
+            width: 100%;
+            text-align: center;
+        }
+    }
+}

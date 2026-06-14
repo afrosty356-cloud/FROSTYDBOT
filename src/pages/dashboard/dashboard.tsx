@@ -13,6 +13,8 @@ type TMobileIconGuide = {
     handleTabChange: (active_number: number) => void;
 };
 
+const AFFILIATE_LINK = 'https://track.deriv.com/_6B2BFQC0E1f1hit6RV3zsGNd7ZgqdRLk/1/';
+
 const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
     const { load_modal, dashboard, client } = useStore();
     const { dashboard_strategies } = load_modal;
@@ -28,6 +30,24 @@ const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
                 })}
             >
                 <div className='tab__dashboard__content'>
+                    {!client.is_logged_in && (
+                        <div className='dashboard__affiliate-banner'>
+                            <div className='dashboard__affiliate-banner__text'>
+                                <span className='dashboard__affiliate-banner__title'>🚀 New to Deriv?</span>
+                                <span className='dashboard__affiliate-banner__subtitle'>
+                                    Create a free account and start trading with FrostyDBot today.
+                                </span>
+                            </div>
+                            <a
+                                href={AFFILIATE_LINK}
+                                target='_blank'
+                                rel='noreferrer'
+                                className='dashboard__affiliate-banner__btn'
+                            >
+                                Get started free →
+                            </a>
+                        </div>
+                    )}
                     {client.is_logged_in && (
                         <Announcements is_mobile={!isDesktop} is_tablet={isTablet} handleTabChange={handleTabChange} />
                     )}
