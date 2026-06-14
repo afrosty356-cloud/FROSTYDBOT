@@ -125,7 +125,7 @@ const useMobileMenuConfig = (client?: RootStore['client']) => {
             [
                 {
                     as: 'a',
-                    href: 'https://wa.me/254115335502',
+                    href: 'https://wa.me/254115335502?text=Hi%2C%20I%20need%20help%20with%20FrostyDBot',
                     label: localize('WhatsApp'),
                     LeftComponent: LegacyWhatsappIcon,
                     target: '_blank',
