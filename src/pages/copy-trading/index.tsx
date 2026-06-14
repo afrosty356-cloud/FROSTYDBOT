@@ -40,9 +40,17 @@ const CopyTrading = observer(() => {
     const [errorMsg, setErrorMsg] = useState('');
     const [showTokenWarning, setShowTokenWarning] = useState(false);
 
+    const [maxStake, setMaxStake] = useState('');
+    const [dailyLossLimit, setDailyLossLimit] = useState('');
+    const [riskAlert, setRiskAlert] = useState('');
+
     const [sessionTime, setSessionTime] = useState(0);
     const sessionStartRef = useRef<number | null>(null);
     const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const startBalanceRef = useRef<number>(0);
+    const dailyLossLimitRef = useRef<number | null>(null);
+    const maxStakeRef = useRef<number | null>(null);
 
     const wsRef = useRef<WebSocket | null>(null);
     const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -158,6 +166,7 @@ const CopyTrading = observer(() => {
                         return;
                     }
                     const acc = data.authorize;
+                    startBalanceRef.current = Number(acc.balance);
                     setTargetAccountInfo({
                         loginid: acc.loginid,
                         currency: acc.currency,
@@ -199,21 +208,51 @@ const CopyTrading = observer(() => {
                 if (data.msg_type === 'transaction') {
                     const txn = data.transaction;
                     if (txn?.action === 'buy') {
-                        addLog({
-                            contract_type: txn.contract_type || 'CONTRACT',
-                            symbol: txn.symbol || '—',
-                            amount: `${txn.amount ? Number(txn.amount).toFixed(2) : '—'} ${txn.currency || ''}`,
-                            status: 'copied',
-                            message: `Contract ID: ${txn.contract_id || '—'}`,
-                        });
-                        setTargetAccountInfo(prev =>
-                            prev
-                                ? {
-                                      ...prev,
-                                      balance: txn.balance ? Number(txn.balance).toFixed(2) : prev.balance,
-                                  }
-                                : prev
-                        );
+                        const stakeAmt = txn.amount ? Number(txn.amount) : 0;
+                        const maxStakeVal = maxStakeRef.current;
+
+                        if (maxStakeVal !== null && stakeAmt > maxStakeVal) {
+                            addLog({
+                                contract_type: txn.contract_type || 'CONTRACT',
+                                symbol: txn.symbol || '—',
+                                amount: `${stakeAmt.toFixed(2)} ${txn.currency || ''}`,
+                                status: 'failed',
+                                message: `⛔ Stake ${stakeAmt.toFixed(2)} exceeds max stake limit of ${maxStakeVal}. Trade skipped.`,
+                            });
+                        } else {
+                            addLog({
+                                contract_type: txn.contract_type || 'CONTRACT',
+                                symbol: txn.symbol || '—',
+                                amount: `${stakeAmt > 0 ? stakeAmt.toFixed(2) : '—'} ${txn.currency || ''}`,
+                                status: 'copied',
+                                message: `Contract ID: ${txn.contract_id || '—'}`,
+                            });
+                        }
+
+                        if (txn.balance) {
+                            const currentBalance = Number(txn.balance);
+                            setTargetAccountInfo(prev =>
+                                prev ? { ...prev, balance: currentBalance.toFixed(2) } : prev
+                            );
+
+                            const lossLimitVal = dailyLossLimitRef.current;
+                            if (lossLimitVal !== null) {
+                                const loss = startBalanceRef.current - currentBalance;
+                                if (loss >= lossLimitVal) {
+                                    ws.send(JSON.stringify({ copy_stop: sourceToken }));
+                                    setRiskAlert(`🛑 Daily loss limit of ${lossLimitVal} reached (loss: ${loss.toFixed(2)}). Copy trading auto-stopped.`);
+                                    addLog({
+                                        contract_type: 'SYSTEM',
+                                        symbol: '—',
+                                        amount: '—',
+                                        status: 'failed',
+                                        message: `Daily loss limit of ${lossLimitVal} reached. Auto-stopped.`,
+                                    });
+                                    setCopyStatus('stopped');
+                                    ws.close();
+                                }
+                            }
+                        }
                     }
                 }
             };
@@ -250,6 +289,22 @@ const CopyTrading = observer(() => {
             return;
         }
 
+        const parsedMaxStake = maxStake.trim() ? parseFloat(maxStake) : null;
+        const parsedLossLimit = dailyLossLimit.trim() ? parseFloat(dailyLossLimit) : null;
+
+        if (parsedMaxStake !== null && (isNaN(parsedMaxStake) || parsedMaxStake <= 0)) {
+            setErrorMsg('Max stake must be a positive number.');
+            return;
+        }
+        if (parsedLossLimit !== null && (isNaN(parsedLossLimit) || parsedLossLimit <= 0)) {
+            setErrorMsg('Daily loss limit must be a positive number.');
+            return;
+        }
+
+        maxStakeRef.current = parsedMaxStake;
+        dailyLossLimitRef.current = parsedLossLimit;
+        setRiskAlert('');
+
         if (isSourceDemo && !allowDemoToReal) {
             setShowTokenWarning(true);
             return;
@@ -265,7 +320,7 @@ const CopyTrading = observer(() => {
                     assets: [],
                     trade_types: [],
                     min_trade_stake: null,
-                    max_trade_stake: null,
+                    max_trade_stake: parsedMaxStake,
                 })
             );
             wsRef.current.send(JSON.stringify({ transaction: 1, subscribe: 1 }));
@@ -412,14 +467,11 @@ const CopyTrading = observer(() => {
                     </div>
 
                     <div className='copy-trading__card'>
-                        <h2 className='copy-trading__card-title'>Settings</h2>
+                        <h2 className='copy-trading__card-title'>Settings & Risk Controls</h2>
                         <div className='copy-trading__setting-row'>
                             <div>
-                                <span className='copy-trading__setting-label'>Allow Demo → Real Copying</span>
-                                <p className='copy-trading__setting-desc'>
-                                    When enabled, trades from a demo account will be copied to a real account.
-                                    Use with caution — real funds will be used.
-                                </p>
+                                <span className='copy-trading__setting-label'>Allow Demo → Real</span>
+                                <p className='copy-trading__setting-desc'>Copy demo trades to a real account.</p>
                             </div>
                             <button
                                 className={`copy-trading__toggle ${allowDemoToReal ? 'copy-trading__toggle--on' : ''}`}
@@ -430,7 +482,47 @@ const CopyTrading = observer(() => {
                                 <span className='copy-trading__toggle-knob' />
                             </button>
                         </div>
+                        <div className='copy-trading__risk-row'>
+                            <div className='copy-trading__risk-field'>
+                                <label className='copy-trading__risk-label'>
+                                    <span className='copy-trading__risk-icon'>🔒</span> Max Stake / Trade
+                                </label>
+                                <input
+                                    className='copy-trading__risk-input'
+                                    type='number'
+                                    min='0.01'
+                                    step='0.01'
+                                    placeholder='e.g. 5.00'
+                                    value={maxStake}
+                                    onChange={e => setMaxStake(e.target.value)}
+                                    disabled={copyStatus === 'active'}
+                                />
+                                <p className='copy-trading__risk-hint'>Skips trades above this amount</p>
+                            </div>
+                            <div className='copy-trading__risk-field'>
+                                <label className='copy-trading__risk-label'>
+                                    <span className='copy-trading__risk-icon'>🛑</span> Daily Loss Limit
+                                </label>
+                                <input
+                                    className='copy-trading__risk-input'
+                                    type='number'
+                                    min='0.01'
+                                    step='0.01'
+                                    placeholder='e.g. 50.00'
+                                    value={dailyLossLimit}
+                                    onChange={e => setDailyLossLimit(e.target.value)}
+                                    disabled={copyStatus === 'active'}
+                                />
+                                <p className='copy-trading__risk-hint'>Auto-stops when loss reaches this</p>
+                            </div>
+                        </div>
                     </div>
+
+                    {riskAlert && (
+                        <div className='copy-trading__risk-alert'>
+                            {riskAlert}
+                        </div>
+                    )}
 
                     {errorMsg && (
                         <div className='copy-trading__error'>
