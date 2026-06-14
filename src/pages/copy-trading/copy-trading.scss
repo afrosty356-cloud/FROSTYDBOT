@@ -1,11 +1,11 @@
 .copy-trading {
-    padding: 10px 16px 8px;
+    padding: 10px 16px 24px;
     max-width: 1400px;
     margin: 0 auto;
-    height: calc(100vh - 115px);
+    min-height: calc(100vh - 115px);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
 
     &__overlay {
         position: fixed;
