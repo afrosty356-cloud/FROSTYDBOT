@@ -47,6 +47,22 @@ const BOTS: Bot[] = [
         icon: '🧊',
     },
     {
+        id: '5b',
+        name: 'Dominator 🌀 Version 2',
+        description: 'Trend-following dominator bot on Volatility 10 — over/under digits with martingale x3, take profit $2, stop loss $14, and recovery digit system.',
+        fileName: 'DOMINATOR_🌀VERSION_2_1781503472374.xml',
+        category: 'Speed Trading',
+        icon: '🌀',
+    },
+    {
+        id: '5c',
+        name: 'Frosty 🌀💹 Dominator',
+        description: 'Advanced dominator on Volatility 50 — over/under digits with entry point, martingale x2.5, take profit $3, stop loss $25, and max loss guard.',
+        fileName: 'FROSTY_🌀💹DOMINATOR_1781503472376.xml',
+        category: 'Speed Trading',
+        icon: '💹',
+    },
+    {
         id: '7',
         name: 'Frosty Money Maker V2',
         description: 'Frosty Over strategy — digit over/under on Volatility 10 with martingale recovery, trend tracking, and profit/stop-loss management.',
