@@ -96,11 +96,11 @@ const BOTS: Bot[] = [
     },
     {
         id: '10',
-        name: 'Binarytool Differ V2.0',
-        description: 'Version 2.0 differ bot with improved accuracy and performance.',
-        fileName: 'BINARYTOOL@_DIFFER_V2.0_(1)_(1)_1765711647662.xml',
+        name: 'Frosty Digit Eliminator',
+        description: 'Differs digit bot on Volatility 100 — entry-loop waits for your chosen digit, martingale x5, take profit $3, stop loss $9.',
+        fileName: 'FROSTY_DIGIT_ELIMINATOR_1781503696373.xml',
         category: 'Differ',
-        icon: '📊',
+        icon: '🎯',
     },
     {
         id: '11',
