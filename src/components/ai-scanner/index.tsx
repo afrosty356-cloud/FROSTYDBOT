@@ -190,9 +190,15 @@ const fetchTickDigits = (symbol: string, pipSize: number, count: number): Promis
     });
 
 // ── Icons ──────────────────────────────────────────────────────────────────
-const SparkIcon = ({ size = 16 }: { size?: number }) => (
-    <svg width={size} height={size} viewBox='0 0 24 24' fill='currentColor'>
+const SparkIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+    <svg width={size} height={size} viewBox='0 0 24 24' fill={color}>
         <path d='M12 2L13.9 9.1L21 7L15.5 12L21 17L13.9 14.9L12 22L10.1 14.9L3 17L8.5 12L3 7L10.1 9.1L12 2Z' />
+    </svg>
+);
+
+const RescanIcon = ({ size = 15 }: { size?: number }) => (
+    <svg width={size} height={size} viewBox='0 0 24 24' fill='currentColor'>
+        <path d='M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z'/>
     </svg>
 );
 
@@ -309,7 +315,7 @@ const AIScanner: React.FC = () => {
         <>
             {/* Floating AI button */}
             <button className='ai-scanner__fab' onClick={() => setIsOpen(true)} title='AI Market Scanner' aria-label='Open AI Market Scanner'>
-                <SparkIcon size={14} />
+                <SparkIcon size={14} color='#1a0e00' />
                 <span>AI</span>
             </button>
 
@@ -319,7 +325,7 @@ const AIScanner: React.FC = () => {
                         {/* Header */}
                         <div className='ai-scanner__header'>
                             <div className='ai-scanner__header-title'>
-                                <SparkIcon size={16} />
+                                <SparkIcon size={16} color='#D3A255' />
                                 <span>Entry Scanner</span>
                             </div>
                             <button className='ai-scanner__close' onClick={handleClose} aria-label='Close'>✕</button>
@@ -418,32 +424,32 @@ const AIScanner: React.FC = () => {
                                 Scan Results <span className='ai-scanner__section-sub'>auto-filled by scanner</span>
                             </div>
                             <div className='ai-scanner__results-grid'>
-                                <div className='ai-scanner__result-field'>
+                                <div className={`ai-scanner__result-field${result ? ' ai-scanner__result-field--active' : ''}`}>
                                     <label>MARKET</label>
                                     <span className={result ? 'ai-scanner__result-value--filled' : ''}>
-                                        {result ? result.marketName : 'Scan to find best market'}
+                                        {result ? result.marketName : 'Run scan first'}
                                     </span>
                                 </div>
-                                <div className='ai-scanner__result-field'>
+                                <div className={`ai-scanner__result-field${result ? ' ai-scanner__result-field--active' : ''}`}>
                                     <label>TRADE TYPE</label>
                                     <span className={result ? 'ai-scanner__result-value--filled' : ''}>
                                         {result ? tradeTypeDisplay : '—'}
                                     </span>
                                 </div>
-                                <div className='ai-scanner__result-field'>
+                                <div className={`ai-scanner__result-field${result ? ' ai-scanner__result-field--active' : ''}`}>
                                     <label>CONTRACT</label>
                                     <span className={result ? 'ai-scanner__result-value--filled' : ''}>
                                         {result ? contractTypeDisplay : '—'}
                                     </span>
                                 </div>
-                                <div className='ai-scanner__result-field'>
+                                <div className={`ai-scanner__result-field${result ? ' ai-scanner__result-field--active' : ''}`}>
                                     <label>PREDICTION</label>
                                     <span className={result ? 'ai-scanner__result-value--filled' : ''}>
                                         {result ? predictionDisplay : '—'}
                                     </span>
                                 </div>
                                 {result && (
-                                    <div className='ai-scanner__result-field ai-scanner__result-field--wide'>
+                                    <div className='ai-scanner__result-field ai-scanner__result-field--wide ai-scanner__result-field--active'>
                                         <label>BEST ENTRY</label>
                                         <span className='ai-scanner__result-value--filled ai-scanner__best-entry'>
                                             {result.tradeType}
@@ -472,7 +478,11 @@ const AIScanner: React.FC = () => {
                                     onClick={handleScan}
                                     disabled={isScanning || isLoading}
                                 >
-                                    {isScanning ? <><span className='ai-scanner__spinner' /> Scanning...</> : 'Scan Markets'}
+                                    {isScanning
+                                        ? <><span className='ai-scanner__spinner' /> Scanning...</>
+                                        : result
+                                            ? <><RescanIcon size={15} /> Re-scan Markets</>
+                                            : 'Scan Markets'}
                                 </button>
                                 <button
                                     className={`ai-scanner__btn ai-scanner__btn--secondary${result && !isScanning ? ' ai-scanner__btn--ready' : ''}`}
@@ -480,7 +490,7 @@ const AIScanner: React.FC = () => {
                                     disabled={!result || isScanning || isLoading}
                                     title={!result ? 'Run a scan first to find the best market' : 'Load AI Scanner Bot with these settings'}
                                 >
-                                    {isLoading ? <><span className='ai-scanner__spinner ai-scanner__spinner--dark' /> Loading...</> : 'Load Scanner Bot'}
+                                    {isLoading ? <><span className='ai-scanner__spinner ai-scanner__spinner--muted' /> Loading...</> : 'Load Scanner Bot'}
                                 </button>
                             </div>
                         </div>
