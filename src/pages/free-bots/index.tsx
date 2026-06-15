@@ -16,11 +16,11 @@ interface Bot {
 const BOTS: Bot[] = [
     {
         id: '1',
-        name: 'Expert Speed Bot',
-        description: 'Advanced speed trading bot with optimized entry and exit points for quick trades.',
-        fileName: '2_2025_Updated_Expert_Speed_Bot_Version_📉📉📉📈📈📈_1_1_1765711647656.xml',
+        name: 'Frosty Speed Bot',
+        description: 'FrostyDBot speed trading bot with martingale management, even/odd digit strategy, and daily profit system.',
+        fileName: 'Frosty_Speed_Bot_1781496344897.xml',
         category: 'Speed Trading',
-        icon: '⚡',
+        icon: '❄️',
     },
     {
         id: '2',
