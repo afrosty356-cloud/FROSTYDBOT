@@ -132,15 +132,29 @@ const patchBotXML = (
     // Prediction: mutation attribute + value
     const tradeOptions = doc.querySelector('block[type="trade_definition_tradeoptions"]');
     if (tradeOptions) {
-        const mutation = tradeOptions.querySelector('mutation');
+        // The <mutation> element may carry xmlns="http://www.w3.org/1999/xhtml", making it a
+        // namespaced node that querySelector('mutation') cannot match in an XMLDocument.
+        // Use getElementsByTagName (matches local name across any namespace) as a reliable fallback.
+        const mutation =
+            tradeOptions.querySelector('mutation') ||
+            (tradeOptions.getElementsByTagName('mutation')[0] as Element | undefined) ||
+            null;
         if (mutation) {
             mutation.setAttribute('has_prediction', xmlParams.hasPredict ? 'true' : 'false');
         }
-        if (xmlParams.hasPredict && xmlParams.prediction !== null) {
-            const predValue = tradeOptions.querySelector('value[name="PREDICTION"]');
-            if (predValue) {
-                const numField = predValue.querySelector('field[name="NUM"]');
-                if (numField) numField.textContent = String(xmlParams.prediction);
+        // Always locate the PREDICTION value block so it can be patched.
+        // querySelector is scoped to tradeOptions, so it reliably finds the child value.
+        const predValue = tradeOptions.querySelector('value[name="PREDICTION"]');
+        if (predValue) {
+            // The prediction field may live inside a <shadow> or a <block> element.
+            const numField =
+                predValue.querySelector('shadow field[name="NUM"]') ||
+                predValue.querySelector('block field[name="NUM"]') ||
+                predValue.querySelector('field[name="NUM"]');
+            if (numField) {
+                numField.textContent = xmlParams.hasPredict && xmlParams.prediction !== null
+                    ? String(xmlParams.prediction)
+                    : '0';
             }
         }
     }
@@ -169,25 +183,51 @@ const patchBotXML = (
     return new XMLSerializer().serializeToString(doc);
 };
 
-const fetchTickDigits = (symbol: string, pipSize: number, count: number): Promise<number[]> =>
+const fetchTickDigitsOnce = (symbol: string, pipSize: number, count: number): Promise<number[]> =>
     new Promise((resolve, reject) => {
         const appId = getAppId();
         const server = getSocketURL().replace(/[^a-zA-Z0-9.]/g, '');
         const ws = new WebSocket(`wss://${server}/websockets/v3?app_id=${appId}&l=EN&brand=frostydbot`);
-        const timer = setTimeout(() => { ws.close(); reject(new Error(`Timeout: ${symbol}`)); }, 20000);
+        let settled = false;
+        const done = (fn: () => void) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            try { ws.close(); } catch { /* ignore */ }
+            fn();
+        };
+        const timer = setTimeout(() => done(() => reject(new Error(`Timeout: ${symbol}`))), 25000);
         ws.onopen = () => ws.send(JSON.stringify({ ticks_history: symbol, count: Math.min(count, 5000), end: 'latest', style: 'ticks' }));
         ws.onmessage = e => {
-            clearTimeout(timer);
             try {
                 const data = JSON.parse(e.data);
-                ws.close();
-                if (data.error) { reject(new Error(data.error.message)); return; }
-                if (data.history?.prices) resolve(data.history.prices.map((p: number) => getLastDigit(p, pipSize)));
-                else reject(new Error('No price data'));
-            } catch { reject(new Error('Parse error')); }
+                // Only act on the history response — ignore pings, echoes, and other message types
+                if (data.error) {
+                    done(() => reject(new Error(data.error.message)));
+                } else if (data.history?.prices) {
+                    done(() => resolve(data.history.prices.map((p: number) => getLastDigit(p, pipSize))));
+                }
+                // else: not the message we're waiting for — keep the socket open
+            } catch {
+                done(() => reject(new Error('Parse error')));
+            }
         };
-        ws.onerror = () => { clearTimeout(timer); reject(new Error(`WS error: ${symbol}`)); };
+        ws.onerror = () => done(() => reject(new Error(`WS error: ${symbol}`)));
+        ws.onclose = e => {
+            if (!e.wasClean) done(() => reject(new Error(`WS closed unexpectedly: ${symbol}`)));
+        };
     });
+
+const fetchTickDigits = async (symbol: string, pipSize: number, count: number): Promise<number[]> => {
+    // Retry once on failure to handle transient connection issues
+    try {
+        return await fetchTickDigitsOnce(symbol, pipSize, count);
+    } catch {
+        // Wait 500ms before retrying
+        await new Promise(r => setTimeout(r, 500));
+        return fetchTickDigitsOnce(symbol, pipSize, count);
+    }
+};
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 const SparkIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
@@ -249,14 +289,19 @@ const AIScanner: React.FC = () => {
         for (let i = 0; i < MARKETS.length; i++) {
             if (abortRef.current) break;
             const { symbol, name, pipSize } = MARKETS[i];
-            setStatusMsg(`Scanning ${name}...`);
+            setStatusMsg(`Scanning ${name}... (${i + 1}/${MARKETS.length})`);
             setProgress(Math.round(((i + 0.5) / MARKETS.length) * 100));
+            // Small stagger between connections to avoid server-side rate limiting
+            if (i > 0) await new Promise(r => setTimeout(r, 300));
+            if (abortRef.current) break;
             try {
                 const digits = await fetchTickDigits(symbol, pipSize, ticks);
                 if (abortRef.current) break;
                 const { tradeType, winRate } = analyzeDigits(digits, strategy);
                 results.push({ symbol, marketName: name, tradeType, winRate });
-            } catch { /* skip on error */ }
+            } catch (err) {
+                console.warn(`[AI Scanner] Skipped ${name}:`, err);
+            }
         }
 
         if (!abortRef.current && results.length > 0) {
