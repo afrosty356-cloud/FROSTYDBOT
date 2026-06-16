@@ -4,7 +4,7 @@ import { getAppId, getSocketURL } from '@/components/shared/utils/config/config'
 import { useStore } from '@/hooks/useStore';
 import './ai-scanner.scss';
 
-type Strategy = 'over1_under8' | 'over2_under7' | 'even_odd';
+type Strategy = 'over0_under9' | 'over1_under8' | 'over2_under7' | 'over3_under6' | 'over4_under5' | 'even_odd';
 
 interface ScanResult {
     symbol: string;
@@ -38,9 +38,12 @@ const MARKETS = [
 ];
 
 const STRATEGIES: { key: Strategy; label: string; desc: string }[] = [
-    { key: 'over1_under8',    label: 'Over1 / Under8',    desc: 'Scans Over 1 and Under 8 digit patterns across markets.' },
-    { key: 'over2_under7',    label: 'Over2 / Under7',    desc: 'Scans Over 2 and Under 7 digit patterns across markets.' },
-    { key: 'even_odd',        label: 'Even / Odd',        desc: 'Scans Even and Odd last-digit patterns across markets.' },
+    { key: 'over0_under9', label: 'Over0 / Under9', desc: 'High win-rate ~90% baseline. Finds markets where digits heavily favour >0 or <9.' },
+    { key: 'over1_under8', label: 'Over1 / Under8', desc: '~80% baseline. Scans for strongest Over 1 or Under 8 edge across markets.' },
+    { key: 'over2_under7', label: 'Over2 / Under7', desc: '~70% baseline. Scans for strongest Over 2 or Under 7 edge across markets.' },
+    { key: 'over3_under6', label: 'Over3 / Under6', desc: '~60% baseline. Higher payout range — looks for dominant mid-digit bias.' },
+    { key: 'over4_under5', label: 'Over4 / Under5', desc: '~50% baseline. Highest payout tier — finds markets with strong directional digit skew.' },
+    { key: 'even_odd',     label: 'Even / Odd',     desc: '50/50 baseline. Detects markets where even or odd digits are consistently dominating.' },
 ];
 
 const getLastDigit = (price: number, pipSize: number): number => {
@@ -58,6 +61,15 @@ const analyzeDigits = (
     const n = recent.length;
 
     switch (strategy) {
+        case 'over0_under9': {
+            const oRate = (recent.filter(d => d > 0).length / n) * 100;
+            const uRate = (recent.filter(d => d < 9).length / n) * 100;
+            const oEdge = oRate - 90;
+            const uEdge = uRate - 90;
+            return oEdge >= uEdge
+                ? { tradeType: 'Over 0',  winRate: oRate, score: oEdge }
+                : { tradeType: 'Under 9', winRate: uRate, score: uEdge };
+        }
         case 'over1_under8': {
             const oRate = (recent.filter(d => d > 1).length / n) * 100;
             const uRate = (recent.filter(d => d < 8).length / n) * 100;
@@ -76,6 +88,24 @@ const analyzeDigits = (
                 ? { tradeType: 'Over 2',  winRate: oRate, score: oEdge }
                 : { tradeType: 'Under 7', winRate: uRate, score: uEdge };
         }
+        case 'over3_under6': {
+            const oRate = (recent.filter(d => d > 3).length / n) * 100;
+            const uRate = (recent.filter(d => d < 6).length / n) * 100;
+            const oEdge = oRate - 60;
+            const uEdge = uRate - 60;
+            return oEdge >= uEdge
+                ? { tradeType: 'Over 3',  winRate: oRate, score: oEdge }
+                : { tradeType: 'Under 6', winRate: uRate, score: uEdge };
+        }
+        case 'over4_under5': {
+            const oRate = (recent.filter(d => d > 4).length / n) * 100;
+            const uRate = (recent.filter(d => d < 5).length / n) * 100;
+            const oEdge = oRate - 50;
+            const uEdge = uRate - 50;
+            return oEdge >= uEdge
+                ? { tradeType: 'Over 4',  winRate: oRate, score: oEdge }
+                : { tradeType: 'Under 5', winRate: uRate, score: uEdge };
+        }
         case 'even_odd': {
             const eRate = (recent.filter(d => d % 2 === 0).length / n) * 100;
             const oRate = 100 - eRate;
@@ -90,6 +120,10 @@ const analyzeDigits = (
 
 const getXMLParams = (strategy: Strategy, tradeType: string): XMLParams => {
     switch (strategy) {
+        case 'over0_under9':
+            return tradeType === 'Over 0'
+                ? { tradeTypeDeriv: 'overunder', contractType: 'both', purchaseType: 'DIGITOVER',  prediction: 0, hasPredict: true }
+                : { tradeTypeDeriv: 'overunder', contractType: 'both', purchaseType: 'DIGITUNDER', prediction: 9, hasPredict: true };
         case 'over1_under8':
             return tradeType === 'Over 1'
                 ? { tradeTypeDeriv: 'overunder', contractType: 'both', purchaseType: 'DIGITOVER',  prediction: 1, hasPredict: true }
@@ -98,6 +132,14 @@ const getXMLParams = (strategy: Strategy, tradeType: string): XMLParams => {
             return tradeType === 'Over 2'
                 ? { tradeTypeDeriv: 'overunder', contractType: 'both', purchaseType: 'DIGITOVER',  prediction: 2, hasPredict: true }
                 : { tradeTypeDeriv: 'overunder', contractType: 'both', purchaseType: 'DIGITUNDER', prediction: 7, hasPredict: true };
+        case 'over3_under6':
+            return tradeType === 'Over 3'
+                ? { tradeTypeDeriv: 'overunder', contractType: 'both', purchaseType: 'DIGITOVER',  prediction: 3, hasPredict: true }
+                : { tradeTypeDeriv: 'overunder', contractType: 'both', purchaseType: 'DIGITUNDER', prediction: 6, hasPredict: true };
+        case 'over4_under5':
+            return tradeType === 'Over 4'
+                ? { tradeTypeDeriv: 'overunder', contractType: 'both', purchaseType: 'DIGITOVER',  prediction: 4, hasPredict: true }
+                : { tradeTypeDeriv: 'overunder', contractType: 'both', purchaseType: 'DIGITUNDER', prediction: 5, hasPredict: true };
         case 'even_odd':
             return tradeType === 'Even'
                 ? { tradeTypeDeriv: 'evenodd', contractType: 'DIGITEVEN', purchaseType: 'DIGITEVEN', prediction: null, hasPredict: false }
