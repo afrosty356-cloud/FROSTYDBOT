@@ -248,61 +248,6 @@ const fetchAllMarketsAtOnce = (
         ws.onclose  = () => { clearTimeout(timer); finish(); };
     });
 
-const openLiveTickWs = (
-    symbol: string,
-    pipSize: number,
-    onTick: (digit: number) => void
-): WebSocket => {
-    const appId  = getAppId();
-    const server = getSocketURL();
-    const ws = new WebSocket(`wss://${server}/websockets/v3?app_id=${appId}&l=EN&brand=frostydbot`);
-    ws.onopen    = () => ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
-    ws.onmessage = e => {
-        try {
-            const data = JSON.parse(e.data);
-            if (!data.tick) return;
-
-            let digit: number | null = null;
-            const pipSized = data.tick.pip_sized;
-            const rawQuote = data.tick.quote;
-
-            if (pipSized !== undefined && pipSized !== null) {
-                const s = String(pipSized).trim();
-                if (s.includes('.') && s.length > 2) {
-                    const last = parseInt(s[s.length - 1], 10);
-                    if (!isNaN(last)) digit = last;
-                }
-            }
-
-            if (digit === null && rawQuote !== undefined && rawQuote !== null) {
-                const q = Number(rawQuote);
-                if (q > 0) digit = getLastDigit(q, pipSize);
-            }
-
-            if (digit !== null && !isNaN(digit)) onTick(digit);
-        } catch { /* ignore */ }
-    };
-    return ws;
-};
-
-const digitColor = (digit: number, tradeType: string): 'win' | 'lose' | 'match' | 'neutral' => {
-    if (tradeType === 'Over 1')  return digit > 1 ? 'win' : 'lose';
-    if (tradeType === 'Under 8') return digit < 8 ? 'win' : 'lose';
-    if (tradeType === 'Over 2')  return digit > 2 ? 'win' : 'lose';
-    if (tradeType === 'Under 7') return digit < 7 ? 'win' : 'lose';
-    if (tradeType === 'Even')    return digit % 2 === 0 ? 'win' : 'lose';
-    if (tradeType === 'Odd')     return digit % 2 !== 0 ? 'win' : 'lose';
-    if (tradeType.startsWith('Matches')) {
-        const t = parseInt(tradeType.split(' ')[1] ?? '-1', 10);
-        return digit === t ? 'match' : 'neutral';
-    }
-    if (tradeType.startsWith('Differs')) {
-        const t = parseInt(tradeType.split(' ')[1] ?? '-1', 10);
-        return digit === t ? 'lose' : 'win';
-    }
-    return 'neutral';
-};
-
 const SparkIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
     <svg width={size} height={size} viewBox='0 0 24 24' fill={color}>
         <path d='M12 2L13.9 9.1L21 7L15.5 12L21 17L13.9 14.9L12 22L10.1 14.9L3 17L8.5 12L3 7L10.1 9.1L12 2Z' />
@@ -314,72 +259,6 @@ const RescanIcon = ({ size = 15 }: { size?: number }) => (
         <path d='M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z'/>
     </svg>
 );
-
-// Full digit circles (D-Circles style)
-const DigitCircles: React.FC<{
-    freq: number[];
-    total: number;
-    tradeType: string;
-    latestDigit: number | null;
-}> = ({ freq, total, tradeType, latestDigit }) => {
-    const maxFreq = total > 0 ? Math.max(...freq) : 0;
-    const R     = 18;
-    const CIRC  = 2 * Math.PI * R;
-
-    return (
-        <div className='ai-scanner__dcircles-wrap'>
-            <div className='ai-scanner__dcircles'>
-                {Array.from({ length: 10 }, (_, d) => {
-                    const count  = freq[d];
-                    const pct    = total > 0 ? Math.round((count / total) * 100) : 0;
-                    const color  = digitColor(d, tradeType);
-                    const isTop  = count === maxFreq && maxFreq > 0;
-                    const isNew  = d === latestDigit;
-                    const dash   = (pct / 100) * CIRC;
-
-                    return (
-                        <div
-                            key={d}
-                            className={[
-                                'ai-scanner__dcircle',
-                                `ai-scanner__dcircle--${color}`,
-                                isTop ? 'ai-scanner__dcircle--top' : '',
-                                isNew ? 'ai-scanner__dcircle--latest' : '',
-                            ].filter(Boolean).join(' ')}
-                        >
-                            <svg viewBox='0 0 44 44' width='52' height='52'>
-                                <circle cx='22' cy='22' r={R} fill='none' stroke='rgba(255,255,255,0.07)' strokeWidth='3.5' />
-                                <circle
-                                    cx='22' cy='22' r={R}
-                                    fill='none'
-                                    stroke='currentColor'
-                                    strokeWidth='3.5'
-                                    strokeLinecap='round'
-                                    strokeDasharray={`${dash.toFixed(2)} ${(CIRC - dash).toFixed(2)}`}
-                                    style={{ transform: 'rotate(-90deg)', transformOrigin: '22px 22px', transition: 'stroke-dasharray 0.4s ease' }}
-                                />
-                                <text x='22' y='22' textAnchor='middle' dominantBaseline='central' className='ai-scanner__dcircle-num'>
-                                    {d}
-                                </text>
-                            </svg>
-                            <div className='ai-scanner__dcircle-pct'>{pct}%</div>
-                            {isNew && <div className='ai-scanner__dcircle-pulse' />}
-                        </div>
-                    );
-                })}
-            </div>
-
-            {latestDigit !== null && (
-                <div className='ai-scanner__dcursor-track'>
-                    <div
-                        className='ai-scanner__dcursor ai-scanner__dcursor--visible'
-                        style={{ left: `${((latestDigit + 0.5) / 10) * 100}%` }}
-                    />
-                </div>
-            )}
-        </div>
-    );
-};
 
 // ── Component ─────────────────────────────────────────────────────────────────
 const AIScanner: React.FC = () => {
@@ -400,51 +279,7 @@ const AIScanner: React.FC = () => {
     const [statusMsg,  setStatusMsg]  = useState('');
     const [progress,   setProgress]   = useState(0);
 
-    const [liveFreq,   setLiveFreq]   = useState<number[]>(Array(10).fill(0));
-    const [liveTotal,  setLiveTotal]  = useState(0);
-    const [liveLatest, setLiveLatest] = useState<number | null>(null);
-    const liveWsRef = useRef<WebSocket | null>(null);
-    const abortRef  = useRef(false);
-
-    // Open live stream when result changes
-    useEffect(() => {
-        if (liveWsRef.current) {
-            try { liveWsRef.current.close(); } catch { /* ignore */ }
-            liveWsRef.current = null;
-        }
-        setLiveLatest(null);
-
-        if (!result) {
-            setLiveFreq(Array(10).fill(0));
-            setLiveTotal(0);
-            return;
-        }
-
-        setLiveFreq(Array.isArray(result.digitFreq) ? [...result.digitFreq] : Array(10).fill(0));
-        setLiveTotal(result.scanTotal ?? 0);
-
-        const market = MARKETS.find(m => m.symbol === result.symbol);
-        if (!market) return;
-
-        const ws = openLiveTickWs(market.symbol, market.pipSize, digit => {
-            setLiveFreq(prev => { const n = [...prev]; n[digit]++; return n; });
-            setLiveTotal(prev => prev + 1);
-            setLiveLatest(digit);
-        });
-        liveWsRef.current = ws;
-
-        return () => {
-            try { ws.close(); } catch { /* ignore */ }
-        };
-    }, [result]);
-
-    // Close live stream when modal closes
-    useEffect(() => {
-        if (!isOpen && liveWsRef.current) {
-            try { liveWsRef.current.close(); } catch { /* ignore */ }
-            liveWsRef.current = null;
-        }
-    }, [isOpen]);
+    const abortRef = useRef(false);
 
     const handleClose = () => {
         abortRef.current = true;
@@ -648,49 +483,6 @@ const AIScanner: React.FC = () => {
                                     </div>
                                 )}
                             </div>
-
-                            {/* ── Digit Distribution (D-Circles style) ─────── */}
-                            {result && (
-                                <div className='ai-scanner__live'>
-                                    <div className='ai-scanner__live-header'>
-                                        <span className='ai-scanner__live-dot' />
-                                        <span className='ai-scanner__live-label'>
-                                            {result.marketName} — Digit Distribution
-                                        </span>
-                                        {liveTotal > 0
-                                            ? <span className='ai-scanner__live-count'>{liveTotal} ticks</span>
-                                            : <span className='ai-scanner__live-hint'>Connecting…</span>
-                                        }
-                                    </div>
-
-                                    {liveTotal === 0
-                                        ? <div className='ai-scanner__live-waiting'>Waiting for ticks…</div>
-                                        : (
-                                            <DigitCircles
-                                                freq={liveFreq}
-                                                total={liveTotal}
-                                                tradeType={result.tradeType}
-                                                latestDigit={liveLatest}
-                                            />
-                                        )
-                                    }
-
-                                    {liveTotal > 0 && (
-                                        <div className='ai-scanner__live-legend'>
-                                            {result.tradeType.startsWith('Over') || result.tradeType.startsWith('Under')
-                                                ? <><span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--win' />Win &nbsp;<span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--lose' />Lose</>
-                                                : result.tradeType === 'Even' || result.tradeType === 'Odd'
-                                                ? <><span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--win' />Even &nbsp;<span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--lose' />Odd</>
-                                                : result.tradeType.startsWith('Matches')
-                                                ? <><span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--match' />Target &nbsp;<span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--neutral' />Other</>
-                                                : result.tradeType.startsWith('Differs')
-                                                ? <><span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--win' />Win &nbsp;<span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--lose' />Target (avoid)</>
-                                                : null
-                                            }
-                                        </div>
-                                    )}
-                                </div>
-                            )}
 
                             {/* Progress */}
                             {isScanning && (
