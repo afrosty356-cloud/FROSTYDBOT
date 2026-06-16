@@ -519,6 +519,123 @@
             border-top-color: rgba(211, 162, 85, 0.6);
         }
     }
+
+    // ── Live tick stream ────────────────────────────────────────────────────
+    &__live {
+        margin-bottom: 1.6rem;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(211, 162, 85, 0.18);
+        border-radius: 1rem;
+        padding: 1.1rem 1.4rem;
+    }
+
+    &__live-header {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+    }
+
+    &__live-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #4caf50;
+        flex-shrink: 0;
+        animation: ai-pulse 1.4s ease-in-out infinite;
+    }
+
+    &__live-label {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: rgba(211, 162, 85, 0.85);
+        flex: 1;
+    }
+
+    &__live-hint {
+        font-size: 0.9rem;
+        color: rgba(211, 162, 85, 0.35);
+        font-style: italic;
+        width: 100%;
+        padding-left: 1.3rem;
+        margin-top: -0.4rem;
+    }
+
+    &__live-digits {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+        min-height: 3.2rem;
+        align-items: center;
+    }
+
+    &__live-waiting {
+        font-size: 1.05rem;
+        color: rgba(211, 162, 85, 0.3);
+        font-style: italic;
+    }
+
+    &__live-digit {
+        width: 2.8rem;
+        height: 2.8rem;
+        border-radius: 0.6rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.35rem;
+        font-weight: 800;
+        flex-shrink: 0;
+        transition: transform 0.1s ease;
+        border: 1.5px solid transparent;
+
+        // Win — digit satisfies the condition
+        &--win {
+            background: rgba(76, 175, 80, 0.18);
+            color: #81c784;
+            border-color: rgba(76, 175, 80, 0.35);
+        }
+
+        // Lose — digit does NOT satisfy the condition
+        &--lose {
+            background: rgba(244, 67, 54, 0.15);
+            color: #e57373;
+            border-color: rgba(244, 67, 54, 0.3);
+        }
+
+        // Match highlight (Matches strategy — target digit)
+        &--match {
+            background: rgba(211, 162, 85, 0.25);
+            color: #D3A255;
+            border-color: rgba(211, 162, 85, 0.5);
+        }
+
+        // Neutral (non-target digits in Matches)
+        &--neutral {
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(211, 162, 85, 0.4);
+            border-color: rgba(211, 162, 85, 0.1);
+        }
+
+        // Most recent tick — larger + animated
+        &--latest {
+            transform: scale(1.18);
+            box-shadow: 0 0 10px rgba(211, 162, 85, 0.3);
+            z-index: 1;
+            border-width: 2px;
+            animation: ai-pop 0.2s ease;
+        }
+    }
+}
+
+@keyframes ai-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.35; }
+}
+
+@keyframes ai-pop {
+    0%   { transform: scale(1.4); }
+    100% { transform: scale(1.18); }
 }
 
 @keyframes ai-in {
