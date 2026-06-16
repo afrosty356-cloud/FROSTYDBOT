@@ -303,17 +303,6 @@ const digitColor = (digit: number, tradeType: string): 'win' | 'lose' | 'match' 
     return 'neutral';
 };
 
-const winRateClass = (winRate: number, tradeType: string): string => {
-    if (tradeType.startsWith('Matches')) {
-        if (winRate >= 14) return 'strong';
-        if (winRate >= 11) return 'good';
-        return 'weak';
-    }
-    if (winRate >= 85) return 'strong';
-    if (winRate >= 78) return 'good';
-    return 'weak';
-};
-
 const SparkIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
     <svg width={size} height={size} viewBox='0 0 24 24' fill={color}>
         <path d='M12 2L13.9 9.1L21 7L15.5 12L21 17L13.9 14.9L12 22L10.1 14.9L3 17L8.5 12L3 7L10.1 9.1L12 2Z' />
@@ -325,31 +314,6 @@ const RescanIcon = ({ size = 15 }: { size?: number }) => (
         <path d='M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z'/>
     </svg>
 );
-
-// Mini bar chart for each digit (0-9) on the market row
-const DigitMiniBar: React.FC<{ digitFreq: number[]; tradeType: string }> = ({ digitFreq, tradeType }) => {
-    const total = digitFreq.reduce((a, b) => a + b, 0);
-    if (!total) return null;
-    const maxFreq = Math.max(...digitFreq);
-    return (
-        <div className='ai-scanner__mini-bars'>
-            {digitFreq.map((count, d) => {
-                const pct = maxFreq > 0 ? (count / maxFreq) * 100 : 0;
-                const color = digitColor(d, tradeType);
-                return (
-                    <div key={d} className='ai-scanner__mini-bar-col'>
-                        <div
-                            className={`ai-scanner__mini-bar ai-scanner__mini-bar--${color}`}
-                            style={{ height: `${Math.max(pct, 4)}%` }}
-                            title={`Digit ${d}: ${((count / total) * 100).toFixed(1)}%`}
-                        />
-                        <span className='ai-scanner__mini-bar-label'>{d}</span>
-                    </div>
-                );
-            })}
-        </div>
-    );
-};
 
 // Full digit circles (D-Circles style)
 const DigitCircles: React.FC<{
@@ -430,20 +394,19 @@ const AIScanner: React.FC = () => {
     const [takeProfit, setTakeProfit] = useState(5);
     const [stopLoss,   setStopLoss]   = useState(8);
 
-    const [isScanning,   setIsScanning]   = useState(false);
-    const [isLoading,    setIsLoading]    = useState(false);
-    const [allResults,   setAllResults]   = useState<ScanResult[]>([]);
-    const [selected,     setSelected]     = useState<ScanResult | null>(null);
-    const [statusMsg,    setStatusMsg]    = useState('');
-    const [progress,     setProgress]     = useState(0);
+    const [isScanning, setIsScanning] = useState(false);
+    const [isLoading,  setIsLoading]  = useState(false);
+    const [result,     setResult]     = useState<ScanResult | null>(null);
+    const [statusMsg,  setStatusMsg]  = useState('');
+    const [progress,   setProgress]   = useState(0);
 
-    const [liveFreq,     setLiveFreq]     = useState<number[]>(Array(10).fill(0));
-    const [liveTotal,    setLiveTotal]    = useState(0);
-    const [liveLatest,   setLiveLatest]   = useState<number | null>(null);
-    const liveWsRef  = useRef<WebSocket | null>(null);
-    const abortRef   = useRef(false);
+    const [liveFreq,   setLiveFreq]   = useState<number[]>(Array(10).fill(0));
+    const [liveTotal,  setLiveTotal]  = useState(0);
+    const [liveLatest, setLiveLatest] = useState<number | null>(null);
+    const liveWsRef = useRef<WebSocket | null>(null);
+    const abortRef  = useRef(false);
 
-    // Open live stream on selected market
+    // Open live stream when result changes
     useEffect(() => {
         if (liveWsRef.current) {
             try { liveWsRef.current.close(); } catch { /* ignore */ }
@@ -451,16 +414,16 @@ const AIScanner: React.FC = () => {
         }
         setLiveLatest(null);
 
-        if (!selected) {
+        if (!result) {
             setLiveFreq(Array(10).fill(0));
             setLiveTotal(0);
             return;
         }
 
-        setLiveFreq(Array.isArray(selected.digitFreq) ? [...selected.digitFreq] : Array(10).fill(0));
-        setLiveTotal(selected.scanTotal ?? 0);
+        setLiveFreq(Array.isArray(result.digitFreq) ? [...result.digitFreq] : Array(10).fill(0));
+        setLiveTotal(result.scanTotal ?? 0);
 
-        const market = MARKETS.find(m => m.symbol === selected.symbol);
+        const market = MARKETS.find(m => m.symbol === result.symbol);
         if (!market) return;
 
         const ws = openLiveTickWs(market.symbol, market.pipSize, digit => {
@@ -473,7 +436,7 @@ const AIScanner: React.FC = () => {
         return () => {
             try { ws.close(); } catch { /* ignore */ }
         };
-    }, [selected]);
+    }, [result]);
 
     // Close live stream when modal closes
     useEffect(() => {
@@ -491,23 +454,16 @@ const AIScanner: React.FC = () => {
     const handleStrategyChange = (s: Strategy) => {
         if (isScanning) return;
         setStrategy(s);
-        setAllResults([]);
-        setSelected(null);
+        setResult(null);
         setStatusMsg('');
         setProgress(0);
-    };
-
-    const handleSelectMarket = (r: ScanResult) => {
-        if (selected?.symbol === r.symbol) return;
-        setSelected(r);
     };
 
     const handleScan = useCallback(async () => {
         if (isScanning) return;
         abortRef.current = false;
         setIsScanning(true);
-        setAllResults([]);
-        setSelected(null);
+        setResult(null);
         setProgress(0);
         setStatusMsg(`Connecting — scanning all ${MARKETS.length} markets in parallel...`);
 
@@ -532,13 +488,10 @@ const AIScanner: React.FC = () => {
             results.push({ symbol, marketName: market.name, tradeType, winRate, score, digitFreq, scanTotal: digits.length });
         });
 
-        // Sort best first
-        results.sort((a, b) => b.score - a.score);
-
         if (results.length > 0) {
-            setAllResults(results);
-            setSelected(results[0]);
-            setStatusMsg(`✓ Scanned ${results.length}/${MARKETS.length} markets — best: ${results[0].marketName} (${results[0].winRate.toFixed(1)}%)`);
+            const best = results.reduce((a, b) => a.score > b.score ? a : b);
+            setResult(best);
+            setStatusMsg(`✓ Best entry: ${best.marketName} — ${best.tradeType} (${best.winRate.toFixed(1)}%) from ${results.length}/${MARKETS.length} markets`);
             setProgress(100);
         } else {
             setStatusMsg('Scan failed — no market data received. Check your connection and try again.');
@@ -548,7 +501,7 @@ const AIScanner: React.FC = () => {
     }, [isScanning, strategy, ticks]);
 
     const handleLoadBot = useCallback(async () => {
-        if (!selected || isLoading) return;
+        if (!result || isLoading) return;
         setIsLoading(true);
         setStatusMsg('Loading bot into builder...');
         try {
@@ -556,8 +509,8 @@ const AIScanner: React.FC = () => {
             if (!res.ok) throw new Error('Could not fetch scanner bot XML');
             const xmlTemplate = await res.text();
 
-            const xmlParams  = getXMLParams(strategy, selected.tradeType);
-            const patchedXML = patchBotXML(xmlTemplate, selected.symbol, xmlParams, stake, martingale, takeProfit, stopLoss);
+            const xmlParams  = getXMLParams(strategy, result.tradeType);
+            const patchedXML = patchBotXML(xmlTemplate, result.symbol, xmlParams, stake, martingale, takeProfit, stopLoss);
 
             await load({
                 block_string: patchedXML,
@@ -578,9 +531,9 @@ const AIScanner: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [selected, isLoading, strategy, stake, martingale, takeProfit, stopLoss, store]);
+    }, [result, isLoading, strategy, stake, martingale, takeProfit, stopLoss, store]);
 
-    const xmlParams           = selected ? getXMLParams(strategy, selected.tradeType) : null;
+    const xmlParams           = result ? getXMLParams(strategy, result.tradeType) : null;
     const contractTypeDisplay = xmlParams ? xmlParams.contractType.replace('DIGIT', '') : '—';
     const tradeTypeDisplay    = xmlParams
         ? xmlParams.tradeTypeDeriv === 'overunder' ? 'Over/Under'
@@ -669,116 +622,74 @@ const AIScanner: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* ── All Markets Table ──────────────────────────── */}
-                            {allResults.length > 0 && (
-                                <>
-                                    <div className='ai-scanner__section-label'>
-                                        All Markets <span className='ai-scanner__section-sub'>click a row to view digit distribution</span>
+                            {/* ── Scan Results ──────────────────────────────── */}
+                            <div className='ai-scanner__section-label'>
+                                Scan Results <span className='ai-scanner__section-sub'>auto-filled by scanner</span>
+                            </div>
+                            <div className='ai-scanner__results-grid'>
+                                {[
+                                    { label: 'MARKET',     value: result ? result.marketName  : 'Run scan first' },
+                                    { label: 'TRADE TYPE', value: result ? tradeTypeDisplay   : '—' },
+                                    { label: 'CONTRACT',   value: result ? contractTypeDisplay : '—' },
+                                    { label: 'PREDICTION', value: result ? predictionDisplay  : '—' },
+                                ].map(({ label, value }) => (
+                                    <div key={label} className={`ai-scanner__result-field${result ? ' ai-scanner__result-field--active' : ''}`}>
+                                        <label>{label}</label>
+                                        <span className={result ? 'ai-scanner__result-value--filled' : ''}>{value}</span>
                                     </div>
-                                    <div className='ai-scanner__markets-table'>
-                                        {allResults.map((r, idx) => {
-                                            const isBest    = idx === 0;
-                                            const isActive  = selected?.symbol === r.symbol;
-                                            const rateClass = winRateClass(r.winRate, r.tradeType);
-                                            return (
-                                                <div
-                                                    key={r.symbol}
-                                                    className={[
-                                                        'ai-scanner__market-row',
-                                                        isActive ? 'ai-scanner__market-row--active' : '',
-                                                        isBest   ? 'ai-scanner__market-row--best'   : '',
-                                                    ].filter(Boolean).join(' ')}
-                                                    onClick={() => handleSelectMarket(r)}
-                                                    role='button'
-                                                    tabIndex={0}
-                                                    onKeyDown={e => e.key === 'Enter' && handleSelectMarket(r)}
-                                                >
-                                                    <div className='ai-scanner__market-rank'>
-                                                        {isBest ? '👑' : `#${idx + 1}`}
-                                                    </div>
-                                                    <div className='ai-scanner__market-info'>
-                                                        <span className='ai-scanner__market-name'>{r.marketName}</span>
-                                                        <span className='ai-scanner__market-trade'>{r.tradeType}</span>
-                                                    </div>
-                                                    <DigitMiniBar digitFreq={r.digitFreq} tradeType={r.tradeType} />
-                                                    <div className={`ai-scanner__market-rate ai-scanner__market-rate--${rateClass}`}>
-                                                        {r.winRate.toFixed(1)}%
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                ))}
+                                {result && (
+                                    <div className='ai-scanner__result-field ai-scanner__result-field--wide ai-scanner__result-field--active'>
+                                        <label>BEST ENTRY</label>
+                                        <span className='ai-scanner__result-value--filled ai-scanner__best-entry'>
+                                            {result.tradeType}
+                                            <span className='ai-scanner__win-badge'>{result.winRate.toFixed(1)}%</span>
+                                        </span>
                                     </div>
-                                </>
-                            )}
+                                )}
+                            </div>
 
-                            {/* ── Selected Market: Scan Result Summary ──────── */}
-                            {selected && (
-                                <>
-                                    <div className='ai-scanner__section-label'>
-                                        Selected Entry <span className='ai-scanner__section-sub'>auto-filled by scanner</span>
-                                    </div>
-                                    <div className='ai-scanner__results-grid'>
-                                        {[
-                                            { label: 'MARKET',     value: selected.marketName    },
-                                            { label: 'TRADE TYPE', value: tradeTypeDisplay       },
-                                            { label: 'CONTRACT',   value: contractTypeDisplay    },
-                                            { label: 'PREDICTION', value: predictionDisplay      },
-                                        ].map(({ label, value }) => (
-                                            <div key={label} className='ai-scanner__result-field ai-scanner__result-field--active'>
-                                                <label>{label}</label>
-                                                <span className='ai-scanner__result-value--filled'>{value}</span>
-                                            </div>
-                                        ))}
-                                        <div className='ai-scanner__result-field ai-scanner__result-field--wide ai-scanner__result-field--active'>
-                                            <label>BEST ENTRY</label>
-                                            <span className='ai-scanner__result-value--filled ai-scanner__best-entry'>
-                                                {selected.tradeType}
-                                                <span className='ai-scanner__win-badge'>{selected.winRate.toFixed(1)}%</span>
-                                            </span>
-                                        </div>
+                            {/* ── Digit Distribution (D-Circles style) ─────── */}
+                            {result && (
+                                <div className='ai-scanner__live'>
+                                    <div className='ai-scanner__live-header'>
+                                        <span className='ai-scanner__live-dot' />
+                                        <span className='ai-scanner__live-label'>
+                                            {result.marketName} — Digit Distribution
+                                        </span>
+                                        {liveTotal > 0
+                                            ? <span className='ai-scanner__live-count'>{liveTotal} ticks</span>
+                                            : <span className='ai-scanner__live-hint'>Connecting…</span>
+                                        }
                                     </div>
 
-                                    {/* ── Digit Distribution (D-Circles style) ─ */}
-                                    <div className='ai-scanner__live'>
-                                        <div className='ai-scanner__live-header'>
-                                            <span className='ai-scanner__live-dot' />
-                                            <span className='ai-scanner__live-label'>
-                                                {selected.marketName} — Digit Distribution
-                                            </span>
-                                            {liveTotal > 0
-                                                ? <span className='ai-scanner__live-count'>{liveTotal} ticks</span>
-                                                : <span className='ai-scanner__live-hint'>Connecting…</span>
+                                    {liveTotal === 0
+                                        ? <div className='ai-scanner__live-waiting'>Waiting for ticks…</div>
+                                        : (
+                                            <DigitCircles
+                                                freq={liveFreq}
+                                                total={liveTotal}
+                                                tradeType={result.tradeType}
+                                                latestDigit={liveLatest}
+                                            />
+                                        )
+                                    }
+
+                                    {liveTotal > 0 && (
+                                        <div className='ai-scanner__live-legend'>
+                                            {result.tradeType.startsWith('Over') || result.tradeType.startsWith('Under')
+                                                ? <><span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--win' />Win &nbsp;<span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--lose' />Lose</>
+                                                : result.tradeType === 'Even' || result.tradeType === 'Odd'
+                                                ? <><span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--win' />Even &nbsp;<span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--lose' />Odd</>
+                                                : result.tradeType.startsWith('Matches')
+                                                ? <><span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--match' />Target &nbsp;<span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--neutral' />Other</>
+                                                : result.tradeType.startsWith('Differs')
+                                                ? <><span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--win' />Win &nbsp;<span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--lose' />Target (avoid)</>
+                                                : null
                                             }
                                         </div>
-
-                                        {liveTotal === 0
-                                            ? <div className='ai-scanner__live-waiting'>Waiting for ticks…</div>
-                                            : (
-                                                <DigitCircles
-                                                    freq={liveFreq}
-                                                    total={liveTotal}
-                                                    tradeType={selected.tradeType}
-                                                    latestDigit={liveLatest}
-                                                />
-                                            )
-                                        }
-
-                                        {liveTotal > 0 && (
-                                            <div className='ai-scanner__live-legend'>
-                                                {selected.tradeType.startsWith('Over') || selected.tradeType.startsWith('Under')
-                                                    ? <><span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--win' />Win &nbsp;<span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--lose' />Lose</>
-                                                    : selected.tradeType === 'Even' || selected.tradeType === 'Odd'
-                                                    ? <><span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--win' />Even &nbsp;<span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--lose' />Odd</>
-                                                    : selected.tradeType.startsWith('Matches')
-                                                    ? <><span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--match' />Target &nbsp;<span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--neutral' />Other</>
-                                                    : selected.tradeType.startsWith('Differs')
-                                                    ? <><span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--win' />Win &nbsp;<span className='ai-scanner__live-legend-dot ai-scanner__live-legend-dot--lose' />Target (avoid)</>
-                                                    : null
-                                                }
-                                            </div>
-                                        )}
-                                    </div>
-                                </>
+                                    )}
+                                </div>
                             )}
 
                             {/* Progress */}
@@ -789,7 +700,7 @@ const AIScanner: React.FC = () => {
                             )}
 
                             {/* Status */}
-                            <div className={`ai-scanner__status${selected ? ' ai-scanner__status--success' : ''}`}>
+                            <div className={`ai-scanner__status${result ? ' ai-scanner__status--success' : ''}`}>
                                 {statusMsg || `Ready to scan ${readyLabel} across all ${MARKETS.length} markets.`}
                             </div>
 
@@ -802,21 +713,19 @@ const AIScanner: React.FC = () => {
                                 >
                                     {isScanning
                                         ? <><span className='ai-scanner__spinner' /> Scanning all {MARKETS.length} markets…</>
-                                        : allResults.length > 0
+                                        : result
                                             ? <><RescanIcon size={15} /> Re-scan Markets</>
                                             : `Scan All ${MARKETS.length} Markets`}
                                 </button>
                                 <button
-                                    className={`ai-scanner__btn ai-scanner__btn--secondary${selected && !isScanning ? ' ai-scanner__btn--ready' : ''}`}
+                                    className={`ai-scanner__btn ai-scanner__btn--secondary${result && !isScanning ? ' ai-scanner__btn--ready' : ''}`}
                                     onClick={handleLoadBot}
-                                    disabled={!selected || isScanning || isLoading}
-                                    title={!selected ? 'Run a scan first to find the best market' : 'Load AI Scanner Bot with these settings'}
+                                    disabled={!result || isScanning || isLoading}
+                                    title={!result ? 'Run a scan first to find the best market' : 'Load AI Scanner Bot with these settings'}
                                 >
                                     {isLoading
                                         ? <><span className='ai-scanner__spinner ai-scanner__spinner--muted' /> Loading…</>
-                                        : selected
-                                            ? `Load Bot — ${selected.marketName}`
-                                            : 'Load Scanner Bot'}
+                                        : 'Load Scanner Bot'}
                                 </button>
                             </div>
                         </div>
