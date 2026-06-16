@@ -280,21 +280,31 @@ const openLiveTickWs = (
             const data = JSON.parse(e.data);
             if (!data.tick) return;
 
-            let digit: number;
+            let digit: number | null = null;
+            const pipSized = data.tick.pip_sized;
+            const rawQuote = data.tick.quote;
 
-            // pip_sized is a pre-formatted string from the server (e.g. "1234.5678").
-            // The last character IS the exact last digit — no floating-point rounding at all.
-            if (data.tick.pip_sized !== undefined && data.tick.pip_sized !== null) {
-                const s = String(data.tick.pip_sized).trim();
-                digit = parseInt(s[s.length - 1], 10);
-            } else if (data.tick.quote !== undefined) {
-                // Fallback: use integer arithmetic (no toFixed rounding)
-                digit = getLastDigit(data.tick.quote, pipSize);
-            } else {
-                return;
+            // pip_sized from the server is already formatted to the correct decimal
+            // places (e.g. "609.7823"). The last character is the exact digit.
+            // We MUST verify it is a real price string (contains a '.') — otherwise
+            // the field may be 0 (a number) on the subscription confirmation message,
+            // which becomes String(0) → "0" → digit 0 for every tick.
+            if (pipSized !== undefined && pipSized !== null) {
+                const s = String(pipSized).trim();
+                if (s.includes('.') && s.length > 2) {
+                    const last = parseInt(s[s.length - 1], 10);
+                    if (!isNaN(last)) digit = last;
+                }
             }
 
-            if (!isNaN(digit)) onTick(digit);
+            // Fallback: integer arithmetic on the numeric quote — no toFixed() rounding.
+            // Skip zero quotes (subscription echo / error response has quote=0).
+            if (digit === null && rawQuote !== undefined && rawQuote !== null) {
+                const q = Number(rawQuote);
+                if (q > 0) digit = getLastDigit(q, pipSize);
+            }
+
+            if (digit !== null && !isNaN(digit)) onTick(digit);
         } catch { /* ignore */ }
     };
     return ws;
