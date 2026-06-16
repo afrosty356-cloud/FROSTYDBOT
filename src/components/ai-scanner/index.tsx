@@ -89,8 +89,38 @@ const analyzeDigits = (
         case 'matches_differs': {
             const counts = new Array(10).fill(0);
             recent.forEach(d => counts[d]++);
-            const minIdx = counts.indexOf(Math.min(...counts));
-            const maxIdx = counts.indexOf(Math.max(...counts));
+
+            // Use the last 20 ticks as a recency tie-breaker so that when
+            // multiple digits share the same overall count, we pick the one
+            // that has been most active recently instead of always defaulting
+            // to digit 0 (which is what indexOf would return on a tie).
+            const tail = recent.slice(-20);
+            const tailCounts = new Array(10).fill(0);
+            tail.forEach(d => { tailCounts[d]++; });
+
+            const maxCount = Math.max(...counts);
+            const minCount = Math.min(...counts);
+
+            // Matches: digit with highest overall count; break ties by highest recency count
+            let maxIdx = 0;
+            let bestTail = -1;
+            for (let i = 0; i < 10; i++) {
+                if (counts[i] === maxCount && tailCounts[i] > bestTail) {
+                    bestTail = tailCounts[i];
+                    maxIdx   = i;
+                }
+            }
+
+            // Differs: digit with lowest overall count; break ties by lowest recency count
+            let minIdx = 0;
+            let worstTail = Infinity;
+            for (let i = 0; i < 10; i++) {
+                if (counts[i] === minCount && tailCounts[i] < worstTail) {
+                    worstTail = tailCounts[i];
+                    minIdx    = i;
+                }
+            }
+
             const diffRate  = ((n - counts[minIdx]) / n) * 100;
             const matchRate = (counts[maxIdx] / n) * 100;
             const diffEdge  = diffRate  - 90;
